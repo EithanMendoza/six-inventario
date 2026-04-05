@@ -4,21 +4,27 @@ allprojects {
         mavenCentral()
     }
 
-    // AGREGA ESTE BLOQUE COMPLETO:
     subprojects {
         project.configurations.all {
             resolutionStrategy.eachDependency { details ->
                 if (details.requested.group == 'androidx.core' && details.requested.name == 'core-ktx') {
-                    details.useVersion "1.13.1" // Una versión estable que no da guerra
+                    details.useVersion "1.13.1" 
                 }
             }
         }
+        
+        // Bloque de evaluación unificado
         afterEvaluate { project ->
             if (project.hasProperty('android')) {
                 project.android {
-                    // Esto obliga a Isar y a todas las demás a usar el SDK 35
+                    // Forzar SDK 35
                     compileSdkVersion 35
                     buildToolsVersion "35.0.0"
+                    
+                    // Inyección de namespace para Isar
+                    if (namespace == null) {
+                        namespace project.group
+                    }
                 }
             }
         }
@@ -26,10 +32,9 @@ allprojects {
 }
 
 rootProject.buildDir = "../build"
+
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
-}
-subprojects {
     project.evaluationDependsOn(":app")
 }
 

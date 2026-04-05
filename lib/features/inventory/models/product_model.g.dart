@@ -33,8 +33,13 @@ const ProductoSchema = CollectionSchema(
       name: r'codigoBarras',
       type: IsarType.string,
     ),
-    r'descripcion': PropertySchema(
+    r'conteoSistema': PropertySchema(
       id: 3,
+      name: r'conteoSistema',
+      type: IsarType.long,
+    ),
+    r'descripcion': PropertySchema(
+      id: 4,
       name: r'descripcion',
       type: IsarType.string,
     )
@@ -59,7 +64,20 @@ const ProductoSchema = CollectionSchema(
       ],
     )
   },
-  links: {},
+  links: {
+    r'categoria': LinkSchema(
+      id: 4260610537036551431,
+      name: r'categoria',
+      target: r'Categoria',
+      single: true,
+    ),
+    r'presentacion': LinkSchema(
+      id: -3603726618808230208,
+      name: r'presentacion',
+      target: r'Presentacion',
+      single: true,
+    )
+  },
   embeddedSchemas: {},
   getId: _productoGetId,
   getLinks: _productoGetLinks,
@@ -87,7 +105,8 @@ void _productoSerialize(
   writer.writeByte(offsets[0], object.agrupacion.index);
   writer.writeLong(offsets[1], object.cantidadFisica);
   writer.writeString(offsets[2], object.codigoBarras);
-  writer.writeString(offsets[3], object.descripcion);
+  writer.writeLong(offsets[3], object.conteoSistema);
+  writer.writeString(offsets[4], object.descripcion);
 }
 
 Producto _productoDeserialize(
@@ -102,7 +121,8 @@ Producto _productoDeserialize(
           TipoAgrupacion.cigarros10;
   object.cantidadFisica = reader.readLong(offsets[1]);
   object.codigoBarras = reader.readString(offsets[2]);
-  object.descripcion = reader.readString(offsets[3]);
+  object.conteoSistema = reader.readLong(offsets[3]);
+  object.descripcion = reader.readString(offsets[4]);
   object.id = id;
   return object;
 }
@@ -122,6 +142,8 @@ P _productoDeserializeProp<P>(
     case 2:
       return (reader.readString(offset)) as P;
     case 3:
+      return (reader.readLong(offset)) as P;
+    case 4:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -150,11 +172,15 @@ Id _productoGetId(Producto object) {
 }
 
 List<IsarLinkBase<dynamic>> _productoGetLinks(Producto object) {
-  return [];
+  return [object.categoria, object.presentacion];
 }
 
 void _productoAttach(IsarCollection<dynamic> col, Id id, Producto object) {
   object.id = id;
+  object.categoria
+      .attach(col, col.isar.collection<Categoria>(), r'categoria', id);
+  object.presentacion
+      .attach(col, col.isar.collection<Presentacion>(), r'presentacion', id);
 }
 
 extension ProductoByIndex on IsarCollection<Producto> {
@@ -577,6 +603,60 @@ extension ProductoQueryFilter
     });
   }
 
+  QueryBuilder<Producto, Producto, QAfterFilterCondition> conteoSistemaEqualTo(
+      int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'conteoSistema',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Producto, Producto, QAfterFilterCondition>
+      conteoSistemaGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'conteoSistema',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Producto, Producto, QAfterFilterCondition> conteoSistemaLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'conteoSistema',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Producto, Producto, QAfterFilterCondition> conteoSistemaBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'conteoSistema',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<Producto, Producto, QAfterFilterCondition> descripcionEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -766,7 +846,33 @@ extension ProductoQueryObject
     on QueryBuilder<Producto, Producto, QFilterCondition> {}
 
 extension ProductoQueryLinks
-    on QueryBuilder<Producto, Producto, QFilterCondition> {}
+    on QueryBuilder<Producto, Producto, QFilterCondition> {
+  QueryBuilder<Producto, Producto, QAfterFilterCondition> categoria(
+      FilterQuery<Categoria> q) {
+    return QueryBuilder.apply(this, (query) {
+      return query.link(q, r'categoria');
+    });
+  }
+
+  QueryBuilder<Producto, Producto, QAfterFilterCondition> categoriaIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.linkLength(r'categoria', 0, true, 0, true);
+    });
+  }
+
+  QueryBuilder<Producto, Producto, QAfterFilterCondition> presentacion(
+      FilterQuery<Presentacion> q) {
+    return QueryBuilder.apply(this, (query) {
+      return query.link(q, r'presentacion');
+    });
+  }
+
+  QueryBuilder<Producto, Producto, QAfterFilterCondition> presentacionIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.linkLength(r'presentacion', 0, true, 0, true);
+    });
+  }
+}
 
 extension ProductoQuerySortBy on QueryBuilder<Producto, Producto, QSortBy> {
   QueryBuilder<Producto, Producto, QAfterSortBy> sortByAgrupacion() {
@@ -802,6 +908,18 @@ extension ProductoQuerySortBy on QueryBuilder<Producto, Producto, QSortBy> {
   QueryBuilder<Producto, Producto, QAfterSortBy> sortByCodigoBarrasDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'codigoBarras', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Producto, Producto, QAfterSortBy> sortByConteoSistema() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conteoSistema', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Producto, Producto, QAfterSortBy> sortByConteoSistemaDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conteoSistema', Sort.desc);
     });
   }
 
@@ -856,6 +974,18 @@ extension ProductoQuerySortThenBy
     });
   }
 
+  QueryBuilder<Producto, Producto, QAfterSortBy> thenByConteoSistema() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conteoSistema', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Producto, Producto, QAfterSortBy> thenByConteoSistemaDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conteoSistema', Sort.desc);
+    });
+  }
+
   QueryBuilder<Producto, Producto, QAfterSortBy> thenByDescripcion() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'descripcion', Sort.asc);
@@ -902,6 +1032,12 @@ extension ProductoQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Producto, Producto, QDistinct> distinctByConteoSistema() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'conteoSistema');
+    });
+  }
+
   QueryBuilder<Producto, Producto, QDistinct> distinctByDescripcion(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -934,6 +1070,12 @@ extension ProductoQueryProperty
   QueryBuilder<Producto, String, QQueryOperations> codigoBarrasProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'codigoBarras');
+    });
+  }
+
+  QueryBuilder<Producto, int, QQueryOperations> conteoSistemaProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'conteoSistema');
     });
   }
 

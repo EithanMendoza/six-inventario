@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async'; // <-- Necesario para manejar el Stream
 
 // Modelos y Servicios
 import '../../inventory/models/product_model.dart';
@@ -31,10 +32,33 @@ class _MermasScreenState extends State<MermasScreen> {
   Producto? _productoSeleccionado;
   TextEditingController? _searchController;
 
+  // Variable para guardar la conexión con Isar
+  StreamSubscription<void>? _dbSubscription;
+
   @override
   void initState() {
     super.initState();
     _cargarCatalogo();
+    _escucharCambiosDB(); // <-- Iniciamos la escucha reactiva
+  }
+
+  // <-- Método que escucha la base de datos en tiempo real
+  Future<void> _escucharCambiosDB() async {
+    final isar = await _db.db;
+    // watchLazy() nos avisa cada vez que la tabla 'productos' sufre cualquier cambio (crear, editar, borrar)
+    _dbSubscription = isar.productos.watchLazy().listen((_) {
+      if (mounted) {
+        _cargarCatalogo(); // Si algo cambia en Isar, recargamos la lista silenciosamente
+      }
+    });
+  }
+
+  // <-- Cancelar la suscripción si la pantalla se destruye para evitar fugas de memoria
+  @override
+  void dispose() {
+    _dbSubscription?.cancel();
+    _searchController?.dispose();
+    super.dispose();
   }
 
   Future<void> _cargarCatalogo() async {

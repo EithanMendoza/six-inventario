@@ -13,4 +13,4 @@ enum TipoOrdenamiento {
   codigoDesc // 9 - 0 (Por código de barras)
 }
 
-enum FiltroCategoria { todas, cervezas, cigarros }
+// ELIMINADO: enum FiltroCategoria { todas, cervezas, cigarros }

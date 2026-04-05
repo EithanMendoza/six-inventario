@@ -1,45 +1,95 @@
 // lib/features/inventory/controllers/inventory_controller.dart
 
 import 'package:flutter/material.dart';
+import 'package:isar/isar.dart';
 import '../models/product_model.dart';
+import '../models/category_model.dart';
+import '../models/presentacion_model.dart';
 import '../models/filtros_model.dart';
 import '../models/inventario_db.dart';
+import '../services/inventory_filter_service.dart';
 
 class InventoryController extends ChangeNotifier {
   final InventarioDB _db = InventarioDB();
 
-  // El catálogo original intacto
   List<Producto> _catalogoCompleto = [];
 
-  // La lista que la UI va a dibujar (ya filtrada y ordenada)
-  List<Producto> productosMostrados = [];
+  List<Producto> obtenerProductosProcesados({Categoria? categoriaEspecifica}) {
+    return InventoryFilterService.ejecutarPipeline(
+      catalogoBase: _catalogoCompleto,
+      busqueda: _busquedaActual,
+      categoria: categoriaEspecifica, // Se inyecta según el Tab actual de la UI
+      presentacion: _presentacionActual,
+      estado: _filtroActual,
+      orden: _ordenActual,
+    );
+  }
+
+  List<Categoria> categoriasDisponibles = [];
   bool isLoading = true;
 
-  // Variables de estado actuales
   String _busquedaActual = '';
   FiltroEstado _filtroActual = FiltroEstado.todos;
   TipoOrdenamiento _ordenActual = TipoOrdenamiento.alfabeticoAsc;
+  Presentacion? _presentacionActual;
 
-  // --- NUEVO: Estado de la Categoría ---
-  FiltroCategoria _categoriaActual = FiltroCategoria.todas;
-
-  // --- GETTERS ---
   FiltroEstado get filtroActual => _filtroActual;
   TipoOrdenamiento get ordenActual => _ordenActual;
+  Presentacion? get presentacionActual => _presentacionActual;
 
-  // --- NUEVO: Getter de la Categoría ---
-  FiltroCategoria get categoriaActual => _categoriaActual;
+  // CACHÉ: Mapa para acceso instantáneo a los chips. Key = Categoria ID (null para "Todo")
+  final Map<int?, List<Presentacion>> _cachePresentaciones = {};
 
-  // --- INICIALIZACIÓN ---
   Future<void> cargarInventario() async {
     isLoading = true;
-    notifyListeners(); // Avisa a la UI que muestre el circulito de carga
+    notifyListeners();
 
     _catalogoCompleto = await _db.obtenerTodosLosProductos();
-    _aplicarFiltrosYOrden(); // Procesa la lista por primera vez
+    final isar = await _db.db;
+
+    for (var p in _catalogoCompleto) {
+      await p.categoria.load();
+      await p.presentacion.load();
+    }
+
+    categoriasDisponibles =
+        await isar.collection<Categoria>().where().findAll();
+
+    // NUEVO: Generamos el mapa de acceso rápido antes de dibujar la UI
+    _generarCachePresentaciones();
+
+    _aplicarFiltrosYOrden();
   }
 
-  // --- MÉTODOS PARA CAMBIAR EL ESTADO DESDE LA UI ---
+  List<Presentacion> obtenerPresentacionesParaCategoria(Categoria? cat) {
+    // Lectura O(1). Cero cálculos en el hilo de la interfaz.
+    return _cachePresentaciones[cat?.id] ?? [];
+  }
+
+  void _generarCachePresentaciones() {
+    _cachePresentaciones.clear();
+
+    // 1. Pre-calcular chips para la pestaña "Todo" (null)
+    final Map<int, Presentacion> unicasGlobal = {};
+    for (var p in _catalogoCompleto) {
+      if (p.presentacion.value != null) {
+        unicasGlobal[p.presentacion.value!.id] = p.presentacion.value!;
+      }
+    }
+    _cachePresentaciones[null] = unicasGlobal.values.toList();
+
+    // 2. Pre-calcular chips para cada categoría
+    for (var cat in categoriasDisponibles) {
+      final Map<int, Presentacion> unicasCat = {};
+      for (var p in _catalogoCompleto) {
+        if (p.categoria.value?.id == cat.id && p.presentacion.value != null) {
+          unicasCat[p.presentacion.value!.id] = p.presentacion.value!;
+        }
+      }
+      _cachePresentaciones[cat.id] = unicasCat.values.toList();
+    }
+  }
+
   void buscar(String texto) {
     _busquedaActual = texto.toLowerCase();
     _aplicarFiltrosYOrden();
@@ -55,50 +105,32 @@ class InventoryController extends ChangeNotifier {
     _aplicarFiltrosYOrden();
   }
 
-  // --- NUEVO: Método para cambiar la categoría ---
-  void cambiarCategoria(FiltroCategoria nuevaCategoria) {
-    _categoriaActual = nuevaCategoria;
+  void cambiarPresentacion(Presentacion? nuevaPresentacion) {
+    _presentacionActual = nuevaPresentacion;
     _aplicarFiltrosYOrden();
   }
 
-  // --- MÉTODO PARA GUARDAR CAMBIOS ---
   Future<void> actualizarConteo(Producto producto) async {
-    // 1. Guardamos el cambio físico en la base de datos de Isar
     await _db.guardarProducto(producto);
-
-    // 2. Recargamos la lista para que la interfaz se ponga verde y actualice el número
     await cargarInventario();
   }
 
-  // --- LA MAGIA: Lógica de Filtrado y Ordenamiento Modular ---
   void _aplicarFiltrosYOrden() {
-    // 1. Empezamos con la lista completa
     List<Producto> listaTemporal = List.from(_catalogoCompleto);
 
-    // 2. Filtro por Búsqueda (Coincidencia parcial en nombre o código)
     if (_busquedaActual.isNotEmpty) {
       listaTemporal = listaTemporal.where((p) {
-        final coincideNombre =
-            p.descripcion.toLowerCase().contains(_busquedaActual);
-        final coincideCodigo = p.codigoBarras.contains(_busquedaActual);
-        return coincideNombre || coincideCodigo;
+        return p.descripcion.toLowerCase().contains(_busquedaActual) ||
+            p.codigoBarras.contains(_busquedaActual);
       }).toList();
     }
 
-    // --- NUEVO: 3. Filtro por Categoría (Cervezas vs Cigarros) ---
-    if (_categoriaActual == FiltroCategoria.cigarros) {
-      // Si son cigarros, filtramos los que tienen la agrupación exacta
+    if (_presentacionActual != null) {
       listaTemporal = listaTemporal
-          .where((p) => p.agrupacion == TipoAgrupacion.cigarros10)
-          .toList();
-    } else if (_categoriaActual == FiltroCategoria.cervezas) {
-      // Si son cervezas, traemos todo lo que NO sea agrupación de cigarros
-      listaTemporal = listaTemporal
-          .where((p) => p.agrupacion != TipoAgrupacion.cigarros10)
+          .where((p) => p.presentacion.value?.id == _presentacionActual!.id)
           .toList();
     }
 
-    // 4. Filtro por Estado (Completados / Faltantes)
     if (_filtroActual == FiltroEstado.completados) {
       listaTemporal = listaTemporal.where((p) => p.cantidadFisica > 0).toList();
     } else if (_filtroActual == FiltroEstado.faltantes) {
@@ -106,7 +138,6 @@ class InventoryController extends ChangeNotifier {
           listaTemporal.where((p) => p.cantidadFisica == 0).toList();
     }
 
-    // 5. Ordenamiento
     listaTemporal.sort((a, b) {
       switch (_ordenActual) {
         case TipoOrdenamiento.alfabeticoAsc:
@@ -120,9 +151,7 @@ class InventoryController extends ChangeNotifier {
       }
     });
 
-    // 6. Actualizamos la lista final y avisamos a la pantalla
-    productosMostrados = listaTemporal;
     isLoading = false;
-    notifyListeners(); // ¡Esto dispara el redibujado solo donde importa!
+    notifyListeners();
   }
 }

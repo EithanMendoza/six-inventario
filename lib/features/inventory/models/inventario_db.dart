@@ -3,12 +3,21 @@
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'product_model.dart';
+import 'category_model.dart';
+import 'presentacion_model.dart';
+import '../services/migration_service.dart';
 import 'catalogo_inicial.dart';
 
 class InventarioDB {
+  static InventarioDB? _instanciaGlobal;
   late Future<Isar> db;
 
-  InventarioDB() {
+  factory InventarioDB() {
+    _instanciaGlobal ??= InventarioDB._internal();
+    return _instanciaGlobal!;
+  }
+
+  InventarioDB._internal() {
     db = openDB();
   }
 
@@ -17,7 +26,11 @@ class InventarioDB {
     if (Isar.instanceNames.isEmpty) {
       final dir = await getApplicationDocumentsDirectory();
       final isar = await Isar.open(
-        [ProductoSchema],
+        [
+          ProductoSchema,
+          CategoriaSchema,
+          PresentacionSchema,
+        ],
         directory: dir.path,
       );
 
@@ -32,6 +45,9 @@ class InventarioDB {
         });
       }
 
+      // Ejecuta la división del enum viejo en Categorías y Presentaciones
+      await MigrationService.migrarEstructuraCompleta(isar);
+
       return isar;
     }
     return Future.value(Isar.getInstance());
@@ -39,24 +55,23 @@ class InventarioDB {
 
   // ================= CRUD =================
 
-  // CREATE & UPDATE (Upsert)
-  // Isar usa 'put' para ambos. Si el objeto ya tiene un ID, lo actualiza.
+  Future<List<Producto>> obtenerTodosLosProductos() async {
+    final isar = await db;
+    return await isar.productos.where().findAll();
+  }
+
   Future<void> guardarProducto(Producto nuevoProducto) async {
     final isar = await db;
-    // Las operaciones de escritura deben ir dentro de un writeTxn (transacción)
     await isar.writeTxn(() async {
+      // Guarda los datos primitivos (incluyendo cantidadFisica y el nuevo conteoSistema)
       await isar.productos.put(nuevoProducto);
+
+      // Guarda las relaciones estructurales
+      await nuevoProducto.categoria.save();
+      await nuevoProducto.presentacion.save();
     });
   }
 
-  // READ (Leer todos)
-  Future<List<Producto>> obtenerTodosLosProductos() async {
-    final isar = await db;
-    // Devuelve todos los productos ordenados por descripción
-    return await isar.productos.where().sortByDescripcion().findAll();
-  }
-
-  // READ (Buscar por código o texto)
   Future<List<Producto>> buscarProducto(String texto) async {
     final isar = await db;
     return await isar.productos
