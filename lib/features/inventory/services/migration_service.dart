@@ -1,3 +1,5 @@
+// lib/features/inventory/services/migration_service.dart
+
 import 'package:isar/isar.dart';
 import '../models/product_model.dart';
 import '../models/category_model.dart';
@@ -5,72 +7,92 @@ import '../models/presentacion_model.dart';
 
 class MigrationService {
   static Future<void> migrarEstructuraCompleta(Isar isar) async {
-    // CAMBIO: Acceso explícito a la colección
     final todosLosProductos =
         await isar.collection<Producto>().where().findAll();
+    if (todosLosProductos.isEmpty) return;
+
+    // 1. CARGA PREVENTIVA (Fuera de la transacción de escritura)
+    // Usamos loadSync() aquí porque no hay ninguna transacción activa.
+    for (final p in todosLosProductos) {
+      p.presentacion.loadSync();
+      p.categoria.loadSync();
+    }
+
+    // 2. PRE-CACHE O(1)
+    final categoriasExistentes = {
+      for (var c in await isar.collection<Categoria>().where().findAll())
+        c.nombre: c
+    };
+    final presentacionesExistentes = {
+      for (var p in await isar.collection<Presentacion>().where().findAll())
+        p.nombre: p
+    };
+
     int registrosMigrados = 0;
 
+    // 3. ÚNICA TRANSACCIÓN DE ESCRITURA
     await isar.writeTxn(() async {
       for (final producto in todosLosProductos) {
-        await producto.categoria.load();
-        await producto.presentacion.load();
-
+        // Ahora el .value ya está en memoria gracias al paso 1
         if (producto.presentacion.value == null) {
           String nombreCat;
-          String nombrePres;
+          String tipoPres;
+          int unidadesPres = 1;
 
           switch (producto.agrupacion) {
             case TipoAgrupacion.cigarros10:
               nombreCat = 'Cigarros';
-              nombrePres = '10 pzas';
+              tipoPres = 'Cigarros';
+              unidadesPres = 10;
               break;
             case TipoAgrupacion.plancha24:
               nombreCat = 'Cervezas';
-              nombrePres = 'Plancha 24';
+              tipoPres = 'Plancha';
+              unidadesPres = 24;
               break;
             case TipoAgrupacion.caja12:
               nombreCat = 'Cervezas';
-              nombrePres = 'Caja 12';
+              tipoPres = 'Caja';
+              unidadesPres = 12;
               break;
             case TipoAgrupacion.caja20:
               nombreCat = 'Cervezas';
-              nombrePres = 'Caja 20';
+              tipoPres = 'Caja';
+              unidadesPres = 20;
               break;
             case TipoAgrupacion.docena:
               nombreCat = 'General';
-              nombrePres = 'Docena';
+              tipoPres = 'Docena';
+              unidadesPres = 12;
               break;
-            case TipoAgrupacion.desconocido:
             default:
               nombreCat = 'General';
-              nombrePres = 'Unidad';
-              break;
+              tipoPres = 'Unidad';
+              unidadesPres = 1;
           }
 
-          // CAMBIO: isar.collection<Categoria>()
-          var categoriaDB = await isar
-              .collection<Categoria>()
-              .filter()
-              .nombreEqualTo(nombreCat)
-              .findFirst();
-          if (categoriaDB == null) {
-            categoriaDB = Categoria.crear(nombreCat);
-            await isar.collection<Categoria>().put(categoriaDB);
+          // Conciliación en RAM
+          Categoria categoria =
+              categoriasExistentes[nombreCat] ??= Categoria.crear(nombreCat);
+          if (categoria.id == Isar.autoIncrement) {
+            await isar.collection<Categoria>().put(categoria);
           }
 
-          // CAMBIO: isar.collection<Presentacion>()
-          var presentacionDB = await isar
-              .collection<Presentacion>()
-              .filter()
-              .nombreEqualTo(nombrePres)
-              .findFirst();
-          if (presentacionDB == null) {
-            presentacionDB = Presentacion.crear(nombrePres);
-            await isar.collection<Presentacion>().put(presentacionDB);
+          String nombreCalculado =
+              unidadesPres > 1 ? '$tipoPres $unidadesPres' : tipoPres;
+          Presentacion presentacion =
+              presentacionesExistentes[nombreCalculado] ??=
+                  Presentacion.crear(tipoPres, unidadesPres);
+
+          if (presentacion.id == Isar.autoIncrement) {
+            await isar.collection<Presentacion>().put(presentacion);
           }
 
-          producto.categoria.value = categoriaDB;
-          producto.presentacion.value = presentacionDB;
+          // Vinculación y persistencia
+          producto.categoria.value = categoria;
+          producto.presentacion.value = presentacion;
+
+          await isar.collection<Producto>().put(producto);
           await producto.categoria.save();
           await producto.presentacion.save();
 
@@ -81,7 +103,7 @@ class MigrationService {
 
     if (registrosMigrados > 0) {
       print(
-          'Migración Estructural (v2): $registrosMigrados productos actualizados.');
+          'Auditoría: $registrosMigrados productos migrados sin colisión de transacciones.');
     }
   }
 }

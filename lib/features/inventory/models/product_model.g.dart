@@ -54,10 +54,23 @@ const ProductoSchema = CollectionSchema(
       id: -3747644888679166614,
       name: r'codigoBarras',
       unique: true,
-      replace: false,
+      replace: true,
       properties: [
         IndexPropertySchema(
           name: r'codigoBarras',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
+    r'descripcion': IndexSchema(
+      id: 6050674522552744632,
+      name: r'descripcion',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'descripcion',
           type: IndexType.hash,
           caseSensitive: true,
         )
@@ -352,6 +365,51 @@ extension ProductoQueryWhere on QueryBuilder<Producto, Producto, QWhereClause> {
               indexName: r'codigoBarras',
               lower: [],
               upper: [codigoBarras],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<Producto, Producto, QAfterWhereClause> descripcionEqualTo(
+      String descripcion) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'descripcion',
+        value: [descripcion],
+      ));
+    });
+  }
+
+  QueryBuilder<Producto, Producto, QAfterWhereClause> descripcionNotEqualTo(
+      String descripcion) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'descripcion',
+              lower: [],
+              upper: [descripcion],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'descripcion',
+              lower: [descripcion],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'descripcion',
+              lower: [descripcion],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'descripcion',
+              lower: [],
+              upper: [descripcion],
               includeUpper: false,
             ));
       }

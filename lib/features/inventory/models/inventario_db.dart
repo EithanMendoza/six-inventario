@@ -10,19 +10,24 @@ import 'catalogo_inicial.dart';
 
 class InventarioDB {
   static InventarioDB? _instanciaGlobal;
-  late Future<Isar> db;
+
+  // AUDITORÍA 2: Singleton Asíncrono Seguro
+  static Future<Isar>? _dbFuture;
 
   factory InventarioDB() {
     _instanciaGlobal ??= InventarioDB._internal();
     return _instanciaGlobal!;
   }
 
-  InventarioDB._internal() {
-    db = openDB();
+  InventarioDB._internal();
+
+  // Getter seguro que garantiza una única inicialización
+  Future<Isar> get db {
+    _dbFuture ??= _openDB();
+    return _dbFuture!;
   }
 
-  // Inicializa la Base de Datos
-  Future<Isar> openDB() async {
+  Future<Isar> _openDB() async {
     if (Isar.instanceNames.isEmpty) {
       final dir = await getApplicationDocumentsDirectory();
       final isar = await Isar.open(
@@ -34,18 +39,21 @@ class InventarioDB {
         directory: dir.path,
       );
 
-      // --- LÓGICA DE AUTO-SEEDING ---
-      // Si la tabla de productos está completamente vacía...
-      if (await isar.productos.count() == 0) {
-        final catalog = CatalogoInicial.obtenerDatos();
+      // AUDITORÍA 1: Prevención del "Bucle de Resurrección"
+      // Solo hace auto-seeding si la base de datos está COMPLETAMENTE virgen.
+      final productosVaciados = await isar.productos.count() == 0;
+      final categoriasVaciadas =
+          await isar.collection<Categoria>().count() == 0;
 
-        // Escribimos toda la lista en la base de datos de golpe
+      if (productosVaciados && categoriasVaciadas) {
+        final catalog = CatalogoInicial.obtenerDatos();
         await isar.writeTxn(() async {
           await isar.productos.putAll(catalog);
         });
       }
 
-      // Ejecuta la división del enum viejo en Categorías y Presentaciones
+      // Ejecuta la migración siempre al arrancar.
+      // El script ya está optimizado para abortar rápido si no hay nada que migrar.
       await MigrationService.migrarEstructuraCompleta(isar);
 
       return isar;
@@ -63,10 +71,8 @@ class InventarioDB {
   Future<void> guardarProducto(Producto nuevoProducto) async {
     final isar = await db;
     await isar.writeTxn(() async {
-      // Guarda los datos primitivos (incluyendo cantidadFisica y el nuevo conteoSistema)
       await isar.productos.put(nuevoProducto);
-
-      // Guarda las relaciones estructurales
+      // Guarda las relaciones si existen
       await nuevoProducto.categoria.save();
       await nuevoProducto.presentacion.save();
     });
@@ -82,7 +88,6 @@ class InventarioDB {
         .findAll();
   }
 
-  // DELETE (Eliminar por ID interno)
   Future<void> eliminarProducto(int id) async {
     final isar = await db;
     await isar.writeTxn(() async {
@@ -90,16 +95,21 @@ class InventarioDB {
     });
   }
 
-  // EXTRA: Resetear todos los conteos físicos a 0
+// AUDITORÍA ACEPTADA: Reseteo de Alta Velocidad con Batch Automático
   Future<void> resetearConteos() async {
     final isar = await db;
-    final productos = await obtenerTodosLosProductos();
 
     await isar.writeTxn(() async {
+      // Bloqueamos la tabla de lectura temporalmente
+      final productos = await isar.productos.where().findAll();
+
+      // Modificación ultrarrápida en RAM
       for (var p in productos) {
         p.cantidadFisica = 0;
-        await isar.productos.put(p);
       }
+
+      // Escritura atómica en disco (Batch)
+      await isar.productos.putAll(productos);
     });
   }
 }

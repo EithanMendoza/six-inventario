@@ -1,66 +1,70 @@
 // lib/features/inventory/services/inventory_filter_service.dart
 
+import 'package:isar/isar.dart';
 import '../models/product_model.dart';
 import '../models/category_model.dart';
 import '../models/presentacion_model.dart';
 import '../models/filtros_model.dart';
 
 class InventoryFilterService {
-  static List<Producto> ejecutarPipeline({
-    required List<Producto> catalogoBase,
+  static Future<List<Producto>> ejecutarPipeline({
+    required Isar isar,
     String busqueda = '',
     Categoria? categoria,
     Presentacion? presentacion,
     FiltroEstado estado = FiltroEstado.todos,
     TipoOrdenamiento orden = TipoOrdenamiento.alfabeticoAsc,
-  }) {
-    // 1. Clonamos la lista base para evitar mutaciones accidentales
-    var resultado = catalogoBase.toList();
+  }) async {
+    // 1. Iniciamos con un filtro que siempre sea cierto para mover el estado
+    // de QFilterCondition a QAfterFilterCondition inmediatamente.
+    var query = isar.productos.filter().idGreaterThan(-1);
 
-    // 2. Filtro de Categoría (Dimensión principal)
-    if (categoria != null) {
-      resultado = resultado
-          .where((p) => p.categoria.value?.id == categoria.id)
-          .toList();
-    }
-
-    // 3. Filtro de Presentación (Sub-dimensión)
-    if (presentacion != null) {
-      resultado = resultado
-          .where((p) => p.presentacion.value?.id == presentacion.id)
-          .toList();
-    }
-
-    // 4. Filtro de Búsqueda de texto
+    // 2. Aplicamos filtros condicionales
     if (busqueda.isNotEmpty) {
       final b = busqueda.toLowerCase();
-      resultado = resultado.where((p) {
-        return p.descripcion.toLowerCase().contains(b) ||
-            p.codigoBarras.contains(b);
-      }).toList();
+      query = query.group((q) => q
+          .descripcionContains(b, caseSensitive: false)
+          .or()
+          .codigoBarrasContains(b, caseSensitive: false));
     }
 
-    // 5. Filtro de Estado Físico
+    if (categoria != null) {
+      query = query.categoria((q) => q.idEqualTo(categoria.id));
+    }
+
+    if (presentacion != null) {
+      query = query.presentacion((q) => q.idEqualTo(presentacion.id));
+    }
+
     if (estado == FiltroEstado.completados) {
-      resultado = resultado.where((p) => p.cantidadFisica > 0).toList();
+      query = query.cantidadFisicaGreaterThan(0);
     } else if (estado == FiltroEstado.faltantes) {
-      resultado = resultado.where((p) => p.cantidadFisica == 0).toList();
+      query = query.cantidadFisicaEqualTo(0);
     }
 
-    // 6. Motor de Ordenamiento Final
-    resultado.sort((a, b) {
-      switch (orden) {
-        case TipoOrdenamiento.alfabeticoAsc:
-          return a.descripcion.compareTo(b.descripcion);
-        case TipoOrdenamiento.alfabeticoDesc:
-          return b.descripcion.compareTo(a.descripcion);
-        case TipoOrdenamiento.codigoAsc:
-          return a.codigoBarras.compareTo(b.codigoBarras);
-        case TipoOrdenamiento.codigoDesc:
-          return b.codigoBarras.compareTo(a.codigoBarras);
-      }
-    });
+    // 3. Ordenamiento (Ahora los métodos sortBy siempre estarán disponibles)
+    List<Producto> resultados;
+    switch (orden) {
+      case TipoOrdenamiento.alfabeticoAsc:
+        resultados = await query.sortByDescripcion().findAll();
+        break;
+      case TipoOrdenamiento.alfabeticoDesc:
+        resultados = await query.sortByDescripcionDesc().findAll();
+        break;
+      case TipoOrdenamiento.codigoAsc:
+        resultados = await query.sortByCodigoBarras().findAll();
+        break;
+      case TipoOrdenamiento.codigoDesc:
+        resultados = await query.sortByCodigoBarrasDesc().findAll();
+        break;
+    }
 
-    return resultado;
+    // 4. Carga de relaciones (Anti N+1)
+    await Future.wait([
+      ...resultados.map((p) => p.categoria.load()),
+      ...resultados.map((p) => p.presentacion.load()),
+    ]);
+
+    return resultados;
   }
 }

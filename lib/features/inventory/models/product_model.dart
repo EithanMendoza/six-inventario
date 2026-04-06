@@ -1,10 +1,11 @@
+// lib/features/inventory/models/product_model.dart
 import 'package:isar/isar.dart';
 import 'category_model.dart';
 import 'presentacion_model.dart';
 
 part 'product_model.g.dart';
 
-@Deprecated('Mantenido estrictamente para migración de datos legacy')
+@Deprecated(r'Migracion legacy')
 enum TipoAgrupacion {
   cigarros10,
   plancha24,
@@ -18,19 +19,22 @@ enum TipoAgrupacion {
 class Producto {
   Id id = Isar.autoIncrement;
 
-  @Index(unique: true)
+  @Index(unique: true, replace: true)
   late String codigoBarras;
 
+  // Eliminamos IndexType.words para resolver el error "Member not found"
+  @Index()
   late String descripcion;
 
-  @Deprecated('Campo en proceso de migración.')
+  @Deprecated(r'Campo en proceso de migracion')
   @enumerated
   TipoAgrupacion agrupacion = TipoAgrupacion.desconocido;
 
   final categoria = IsarLink<Categoria>();
   final presentacion = IsarLink<Presentacion>();
 
-  // CONTEOS
   int cantidadFisica = 0;
   int conteoSistema = 0;
+
+  Producto();
 }

@@ -1,3 +1,4 @@
+//lib/features/inventory/widgets/count_bottom_sheet.dart
 import 'package:flutter/material.dart';
 import '../models/product_model.dart';
 
@@ -93,47 +94,35 @@ class _CountBottomSheetState extends State<CountBottomSheet> {
     Navigator.pop(context);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // --- NUEVO: Lista dinámica de botones según el empaque ---
-    List<Map<String, dynamic>> opcionesRapidas = [];
-
-    switch (widget.producto.agrupacion) {
-      case TipoAgrupacion.plancha24:
-        opcionesRapidas = [
-          {'label': '24', 'valor': 24},
-          {'label': '6', 'valor': 6},
-        ];
-        break;
-      case TipoAgrupacion.caja12:
-        opcionesRapidas = [
-          {'label': '12', 'valor': 12}
-        ];
-        break;
-      case TipoAgrupacion.caja20:
-        opcionesRapidas = [
-          {'label': '20', 'valor': 20}
-        ];
-        break;
-      case TipoAgrupacion.docena:
-        opcionesRapidas = [
-          {'label': '12', 'valor': 12},
-          {
-            'label': '6',
-            'valor': 6
-          }, // La media plancha también suele traer six
-        ];
-        break;
-      case TipoAgrupacion.cigarros10:
-        opcionesRapidas = [
-          {'label': '10', 'valor': 10}
-        ];
-        break;
-      case TipoAgrupacion.desconocido:
-        opcionesRapidas = [];
-        break;
+  // 1. Generador Dinámico de Opciones
+  List<Map<String, dynamic>> _obtenerOpcionesRapidas() {
+    // Programación Defensiva: Fuerza la carga de RAM si no está disponible.
+    if (!widget.producto.presentacion.isLoaded) {
+      widget.producto.presentacion.loadSync();
     }
 
+    final presentacion = widget.producto.presentacion.value;
+    final opciones = <Map<String, dynamic>>[];
+
+    if (presentacion != null && presentacion.unidades > 1) {
+      // 1. Botón Principal (Ej. "Plancha 24")
+      opciones
+          .add({'label': presentacion.nombre, 'valor': presentacion.unidades});
+
+      // 2. Generación automática de botón fraccionado inteligente (Sugerido UX)
+      // Si el empaque es par y mayor a 6, sugerimos la mitad (Ej. Caja 24 -> 12 uds)
+      if (presentacion.unidades % 2 == 0 && presentacion.unidades >= 12) {
+        opciones.add({
+          'label': '${presentacion.unidades ~/ 2} uds',
+          'valor': presentacion.unidades ~/ 2
+        });
+      }
+    }
+    return opciones;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     String prefijo = _modoResta ? '-' : '+';
     Color colorBotones = _modoResta ? Colors.red.shade50 : Colors.green.shade50;
     Color colorTextoBotones =
@@ -218,31 +207,27 @@ class _CountBottomSheetState extends State<CountBottomSheet> {
 
           // --- MODIFICADO: Uso de "Wrap" para que no marque error si hay muchos botones ---
           Wrap(
-            spacing: 8.0, // Espacio horizontal entre botones
-            runSpacing: 8.0, // Espacio vertical si saltan de línea
+            spacing: 8.0,
+            runSpacing: 8.0,
             alignment: WrapAlignment.center,
             children: [
-              // Imprime todos los botones dinámicos (Plancha, Six, etc.)
-              for (var opcion in opcionesRapidas)
-                ElevatedButton.icon(
-                  onPressed: () => _sumarConBotonRapido(opcion['valor']),
-                  icon: Icon(
-                    _modoResta ? Icons.remove : Icons.add,
-                    color: colorTextoBotones,
-                  ),
-                  label: Text('${opcion['label']}'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: colorBotones,
-                    foregroundColor: colorTextoBotones,
-                  ),
-                ),
-
-              // El botón de Sueltos siempre debe existir
+              ..._obtenerOpcionesRapidas().map((opcion) => ElevatedButton.icon(
+                    onPressed: () => _sumarConBotonRapido(opcion['valor']),
+                    icon: Icon(
+                      _modoResta ? Icons.remove : Icons.add,
+                      color: colorTextoBotones,
+                    ),
+                    label: Text('${opcion['label']}'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorBotones,
+                      foregroundColor: colorTextoBotones,
+                    ),
+                  )),
               ElevatedButton.icon(
                 onPressed: () => _sumarConBotonRapido(1),
                 icon: Icon(_modoResta ? Icons.remove : Icons.add,
                     color: colorTextoBotones),
-                label: Text('1'),
+                label: const Text('1 (Suelto)'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorBotones,
                   foregroundColor: colorTextoBotones,

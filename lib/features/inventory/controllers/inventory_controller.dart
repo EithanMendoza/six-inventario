@@ -1,5 +1,6 @@
 // lib/features/inventory/controllers/inventory_controller.dart
 
+import 'dart:async'; // Necesario para el Debouncer (Timer)
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 import '../models/product_model.dart';
@@ -12,18 +13,8 @@ import '../services/inventory_filter_service.dart';
 class InventoryController extends ChangeNotifier {
   final InventarioDB _db = InventarioDB();
 
-  List<Producto> _catalogoCompleto = [];
-
-  List<Producto> obtenerProductosProcesados({Categoria? categoriaEspecifica}) {
-    return InventoryFilterService.ejecutarPipeline(
-      catalogoBase: _catalogoCompleto,
-      busqueda: _busquedaActual,
-      categoria: categoriaEspecifica, // Se inyecta según el Tab actual de la UI
-      presentacion: _presentacionActual,
-      estado: _filtroActual,
-      orden: _ordenActual,
-    );
-  }
+  // EL NÚCLEO DE LA OPCIÓN A: Mapa de caché para la UI síncrona
+  final Map<int?, List<Producto>> _productosFiltrados = {};
 
   List<Categoria> categoriasDisponibles = [];
   bool isLoading = true;
@@ -37,51 +28,116 @@ class InventoryController extends ChangeNotifier {
   TipoOrdenamiento get ordenActual => _ordenActual;
   Presentacion? get presentacionActual => _presentacionActual;
 
-  // CACHÉ: Mapa para acceso instantáneo a los chips. Key = Categoria ID (null para "Todo")
   final Map<int?, List<Presentacion>> _cachePresentaciones = {};
+
+  // ==========================================
+  // AUDITORÍA: Controles de Concurrencia
+  // ==========================================
+  int _idConsultaActual = 0;
+  Timer? _debounceTimer; // Escudo protector contra exceso de consultas a BD
+
+  // Método consumido por inventory_hub_screen.dart (100% Síncrono)
+  List<Producto> obtenerProductosProcesados({Categoria? categoriaEspecifica}) {
+    return _productosFiltrados[categoriaEspecifica?.id] ?? [];
+  }
 
   Future<void> cargarInventario() async {
     isLoading = true;
     notifyListeners();
 
-    _catalogoCompleto = await _db.obtenerTodosLosProductos();
     final isar = await _db.db;
-
-    for (var p in _catalogoCompleto) {
-      await p.categoria.load();
-      await p.presentacion.load();
-    }
-
     categoriasDisponibles =
         await isar.collection<Categoria>().where().findAll();
 
-    // NUEVO: Generamos el mapa de acceso rápido antes de dibujar la UI
-    _generarCachePresentaciones();
+    await _generarCachePresentaciones(isar);
 
-    _aplicarFiltrosYOrden();
+    // Llenamos el mapa por primera vez
+    await _actualizarResultados();
+  }
+
+  // MÉTODO MAESTRO: Calcula asíncronamente las listas con protección de concurrencia
+  Future<void> _actualizarResultados() async {
+    final int idEstaConsulta = ++_idConsultaActual; // Tomamos turno
+    final isar = await _db.db;
+
+    // MAPA TEMPORAL: Evita parpadeos en la UI y limpia llaves de categorías borradas (Fugas de memoria)
+    final Map<int?, List<Producto>> nuevoMapaCalculado = {};
+
+    // A) Consulta para la pestaña "Todo" (null)
+    final resultadosTodo = await InventoryFilterService.ejecutarPipeline(
+      isar: isar,
+      busqueda: _busquedaActual,
+      categoria: null,
+      presentacion: _presentacionActual,
+      estado: _filtroActual,
+      orden: _ordenActual,
+    );
+
+    // SEGURIDAD: Si el usuario ya movió otra cosa mientras calculábamos, abortamos silenciosamente
+    if (idEstaConsulta != _idConsultaActual) return;
+
+    nuevoMapaCalculado[null] = resultadosTodo;
+
+    // B) Ejecución Paralela: Lanzamos todas las consultas de categorías al mismo tiempo
+    final futures = categoriasDisponibles.map((cat) async {
+      final res = await InventoryFilterService.ejecutarPipeline(
+        isar: isar,
+        busqueda: _busquedaActual,
+        categoria: cat,
+        presentacion: _presentacionActual,
+        estado: _filtroActual,
+        orden: _ordenActual,
+      );
+      return MapEntry(cat.id, res);
+    });
+
+    // Esperamos a que todas las consultas paralelas terminen
+    final resultadosCategorias = await Future.wait(futures);
+
+    // Verificamos por última vez el token antes de tocar la pantalla del usuario
+    if (idEstaConsulta != _idConsultaActual) return;
+
+    for (var entry in resultadosCategorias) {
+      nuevoMapaCalculado[entry.key] = entry.value;
+    }
+
+    // C) Actualización Atómica Final
+    _productosFiltrados.clear(); // Limpiamos la RAM basura de forma segura
+    _productosFiltrados.addAll(nuevoMapaCalculado); // Inyectamos la data nueva
+
+    isLoading = false;
+    notifyListeners(); // Avisamos a la UI que el diccionario ya está listo
   }
 
   List<Presentacion> obtenerPresentacionesParaCategoria(Categoria? cat) {
-    // Lectura O(1). Cero cálculos en el hilo de la interfaz.
     return _cachePresentaciones[cat?.id] ?? [];
   }
 
-  void _generarCachePresentaciones() {
+  Future<void> _generarCachePresentaciones(Isar isar) async {
     _cachePresentaciones.clear();
 
-    // 1. Pre-calcular chips para la pestaña "Todo" (null)
+    // 1. Extraemos todo a una lista TEMPORAL (se destruirá al terminar la función liberando la RAM)
+    final catalogoTemporal = await isar.productos.where().findAll();
+
+    // 2. Cargamos las relaciones estructurales en paralelo (Evita el N+1)
+    await Future.wait([
+      ...catalogoTemporal.map((p) => p.categoria.load()),
+      ...catalogoTemporal.map((p) => p.presentacion.load()),
+    ]);
+
+    // 3. RESTAURAMOS TU LÓGICA ORIGINAL: Chips para la pestaña "Todo" (null)
     final Map<int, Presentacion> unicasGlobal = {};
-    for (var p in _catalogoCompleto) {
+    for (var p in catalogoTemporal) {
       if (p.presentacion.value != null) {
         unicasGlobal[p.presentacion.value!.id] = p.presentacion.value!;
       }
     }
     _cachePresentaciones[null] = unicasGlobal.values.toList();
 
-    // 2. Pre-calcular chips para cada categoría
+    // 4. RESTAURAMOS TU LÓGICA ORIGINAL: Chips exclusivos por Categoría
     for (var cat in categoriasDisponibles) {
       final Map<int, Presentacion> unicasCat = {};
-      for (var p in _catalogoCompleto) {
+      for (var p in catalogoTemporal) {
         if (p.categoria.value?.id == cat.id && p.presentacion.value != null) {
           unicasCat[p.presentacion.value!.id] = p.presentacion.value!;
         }
@@ -91,67 +147,45 @@ class InventoryController extends ChangeNotifier {
   }
 
   void buscar(String texto) {
-    _busquedaActual = texto.toLowerCase();
-    _aplicarFiltrosYOrden();
+    _busquedaActual = texto;
+    isLoading = true;
+    notifyListeners(); // Mostramos indicador de carga al teclear
+
+    // Si el usuario teclea otra letra, cancelamos la cuenta regresiva anterior
+    if (_debounceTimer?.isActive ?? false) {
+      _debounceTimer!.cancel();
+    }
+
+    // Esperamos 300ms de inactividad antes de golpear la base de datos
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _actualizarResultados();
+    });
   }
 
-  void cambiarFiltro(FiltroEstado nuevoFiltro) {
+  void cambiarFiltro(FiltroEstado nuevoFiltro) async {
     _filtroActual = nuevoFiltro;
-    _aplicarFiltrosYOrden();
+    isLoading = true;
+    notifyListeners();
+    await _actualizarResultados();
   }
 
-  void cambiarOrden(TipoOrdenamiento nuevoOrden) {
+  void cambiarOrden(TipoOrdenamiento nuevoOrden) async {
     _ordenActual = nuevoOrden;
-    _aplicarFiltrosYOrden();
+    isLoading = true;
+    notifyListeners();
+    await _actualizarResultados();
   }
 
-  void cambiarPresentacion(Presentacion? nuevaPresentacion) {
+  void cambiarPresentacion(Presentacion? nuevaPresentacion) async {
     _presentacionActual = nuevaPresentacion;
-    _aplicarFiltrosYOrden();
+    isLoading = true;
+    notifyListeners();
+    await _actualizarResultados();
   }
 
   Future<void> actualizarConteo(Producto producto) async {
     await _db.guardarProducto(producto);
-    await cargarInventario();
-  }
-
-  void _aplicarFiltrosYOrden() {
-    List<Producto> listaTemporal = List.from(_catalogoCompleto);
-
-    if (_busquedaActual.isNotEmpty) {
-      listaTemporal = listaTemporal.where((p) {
-        return p.descripcion.toLowerCase().contains(_busquedaActual) ||
-            p.codigoBarras.contains(_busquedaActual);
-      }).toList();
-    }
-
-    if (_presentacionActual != null) {
-      listaTemporal = listaTemporal
-          .where((p) => p.presentacion.value?.id == _presentacionActual!.id)
-          .toList();
-    }
-
-    if (_filtroActual == FiltroEstado.completados) {
-      listaTemporal = listaTemporal.where((p) => p.cantidadFisica > 0).toList();
-    } else if (_filtroActual == FiltroEstado.faltantes) {
-      listaTemporal =
-          listaTemporal.where((p) => p.cantidadFisica == 0).toList();
-    }
-
-    listaTemporal.sort((a, b) {
-      switch (_ordenActual) {
-        case TipoOrdenamiento.alfabeticoAsc:
-          return a.descripcion.compareTo(b.descripcion);
-        case TipoOrdenamiento.alfabeticoDesc:
-          return b.descripcion.compareTo(a.descripcion);
-        case TipoOrdenamiento.codigoAsc:
-          return a.codigoBarras.compareTo(b.codigoBarras);
-        case TipoOrdenamiento.codigoDesc:
-          return b.codigoBarras.compareTo(a.codigoBarras);
-      }
-    });
-
-    isLoading = false;
-    notifyListeners();
+    // Solo actualizamos las listas de resultados, sin reconstruir cachés estructurales
+    await _actualizarResultados();
   }
 }

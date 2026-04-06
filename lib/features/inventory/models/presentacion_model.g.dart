@@ -17,10 +17,15 @@ const PresentacionSchema = CollectionSchema(
   name: r'Presentacion',
   id: 2291059094600169492,
   properties: {
-    r'nombre': PropertySchema(
+    r'tipo': PropertySchema(
       id: 0,
-      name: r'nombre',
+      name: r'tipo',
       type: IsarType.string,
+    ),
+    r'unidades': PropertySchema(
+      id: 1,
+      name: r'unidades',
+      type: IsarType.long,
     )
   },
   estimateSize: _presentacionEstimateSize,
@@ -29,15 +34,15 @@ const PresentacionSchema = CollectionSchema(
   deserializeProp: _presentacionDeserializeProp,
   idName: r'id',
   indexes: {
-    r'nombre': IndexSchema(
-      id: -8239814765453414572,
-      name: r'nombre',
-      unique: true,
-      replace: true,
+    r'tipo': IndexSchema(
+      id: 3681353239984507137,
+      name: r'tipo',
+      unique: false,
+      replace: false,
       properties: [
         IndexPropertySchema(
-          name: r'nombre',
-          type: IndexType.hash,
+          name: r'tipo',
+          type: IndexType.value,
           caseSensitive: true,
         )
       ],
@@ -57,7 +62,7 @@ int _presentacionEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
-  bytesCount += 3 + object.nombre.length * 3;
+  bytesCount += 3 + object.tipo.length * 3;
   return bytesCount;
 }
 
@@ -67,7 +72,8 @@ void _presentacionSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeString(offsets[0], object.nombre);
+  writer.writeString(offsets[0], object.tipo);
+  writer.writeLong(offsets[1], object.unidades);
 }
 
 Presentacion _presentacionDeserialize(
@@ -78,7 +84,8 @@ Presentacion _presentacionDeserialize(
 ) {
   final object = Presentacion();
   object.id = id;
-  object.nombre = reader.readString(offsets[0]);
+  object.tipo = reader.readString(offsets[0]);
+  object.unidades = reader.readLong(offsets[1]);
   return object;
 }
 
@@ -91,6 +98,8 @@ P _presentacionDeserializeProp<P>(
   switch (propertyId) {
     case 0:
       return (reader.readString(offset)) as P;
+    case 1:
+      return (reader.readLong(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -109,66 +118,19 @@ void _presentacionAttach(
   object.id = id;
 }
 
-extension PresentacionByIndex on IsarCollection<Presentacion> {
-  Future<Presentacion?> getByNombre(String nombre) {
-    return getByIndex(r'nombre', [nombre]);
-  }
-
-  Presentacion? getByNombreSync(String nombre) {
-    return getByIndexSync(r'nombre', [nombre]);
-  }
-
-  Future<bool> deleteByNombre(String nombre) {
-    return deleteByIndex(r'nombre', [nombre]);
-  }
-
-  bool deleteByNombreSync(String nombre) {
-    return deleteByIndexSync(r'nombre', [nombre]);
-  }
-
-  Future<List<Presentacion?>> getAllByNombre(List<String> nombreValues) {
-    final values = nombreValues.map((e) => [e]).toList();
-    return getAllByIndex(r'nombre', values);
-  }
-
-  List<Presentacion?> getAllByNombreSync(List<String> nombreValues) {
-    final values = nombreValues.map((e) => [e]).toList();
-    return getAllByIndexSync(r'nombre', values);
-  }
-
-  Future<int> deleteAllByNombre(List<String> nombreValues) {
-    final values = nombreValues.map((e) => [e]).toList();
-    return deleteAllByIndex(r'nombre', values);
-  }
-
-  int deleteAllByNombreSync(List<String> nombreValues) {
-    final values = nombreValues.map((e) => [e]).toList();
-    return deleteAllByIndexSync(r'nombre', values);
-  }
-
-  Future<Id> putByNombre(Presentacion object) {
-    return putByIndex(r'nombre', object);
-  }
-
-  Id putByNombreSync(Presentacion object, {bool saveLinks = true}) {
-    return putByIndexSync(r'nombre', object, saveLinks: saveLinks);
-  }
-
-  Future<List<Id>> putAllByNombre(List<Presentacion> objects) {
-    return putAllByIndex(r'nombre', objects);
-  }
-
-  List<Id> putAllByNombreSync(List<Presentacion> objects,
-      {bool saveLinks = true}) {
-    return putAllByIndexSync(r'nombre', objects, saveLinks: saveLinks);
-  }
-}
-
 extension PresentacionQueryWhereSort
     on QueryBuilder<Presentacion, Presentacion, QWhere> {
   QueryBuilder<Presentacion, Presentacion, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterWhere> anyTipo() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'tipo'),
+      );
     });
   }
 }
@@ -242,46 +204,137 @@ extension PresentacionQueryWhere
     });
   }
 
-  QueryBuilder<Presentacion, Presentacion, QAfterWhereClause> nombreEqualTo(
-      String nombre) {
+  QueryBuilder<Presentacion, Presentacion, QAfterWhereClause> tipoEqualTo(
+      String tipo) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(IndexWhereClause.equalTo(
-        indexName: r'nombre',
-        value: [nombre],
+        indexName: r'tipo',
+        value: [tipo],
       ));
     });
   }
 
-  QueryBuilder<Presentacion, Presentacion, QAfterWhereClause> nombreNotEqualTo(
-      String nombre) {
+  QueryBuilder<Presentacion, Presentacion, QAfterWhereClause> tipoNotEqualTo(
+      String tipo) {
     return QueryBuilder.apply(this, (query) {
       if (query.whereSort == Sort.asc) {
         return query
             .addWhereClause(IndexWhereClause.between(
-              indexName: r'nombre',
+              indexName: r'tipo',
               lower: [],
-              upper: [nombre],
+              upper: [tipo],
               includeUpper: false,
             ))
             .addWhereClause(IndexWhereClause.between(
-              indexName: r'nombre',
-              lower: [nombre],
+              indexName: r'tipo',
+              lower: [tipo],
               includeLower: false,
               upper: [],
             ));
       } else {
         return query
             .addWhereClause(IndexWhereClause.between(
-              indexName: r'nombre',
-              lower: [nombre],
+              indexName: r'tipo',
+              lower: [tipo],
               includeLower: false,
               upper: [],
             ))
             .addWhereClause(IndexWhereClause.between(
-              indexName: r'nombre',
+              indexName: r'tipo',
               lower: [],
-              upper: [nombre],
+              upper: [tipo],
               includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterWhereClause> tipoGreaterThan(
+    String tipo, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'tipo',
+        lower: [tipo],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterWhereClause> tipoLessThan(
+    String tipo, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'tipo',
+        lower: [],
+        upper: [tipo],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterWhereClause> tipoBetween(
+    String lowerTipo,
+    String upperTipo, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'tipo',
+        lower: [lowerTipo],
+        includeLower: includeLower,
+        upper: [upperTipo],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterWhereClause> tipoStartsWith(
+      String TipoPrefix) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'tipo',
+        lower: [TipoPrefix],
+        upper: ['$TipoPrefix\u{FFFFF}'],
+      ));
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterWhereClause> tipoIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'tipo',
+        value: [''],
+      ));
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterWhereClause> tipoIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.lessThan(
+              indexName: r'tipo',
+              upper: [''],
+            ))
+            .addWhereClause(IndexWhereClause.greaterThan(
+              indexName: r'tipo',
+              lower: [''],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.greaterThan(
+              indexName: r'tipo',
+              lower: [''],
+            ))
+            .addWhereClause(IndexWhereClause.lessThan(
+              indexName: r'tipo',
+              upper: [''],
             ));
       }
     });
@@ -343,13 +396,13 @@ extension PresentacionQueryFilter
     });
   }
 
-  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition> nombreEqualTo(
+  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition> tipoEqualTo(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'nombre',
+        property: r'tipo',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -357,7 +410,7 @@ extension PresentacionQueryFilter
   }
 
   QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition>
-      nombreGreaterThan(
+      tipoGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
@@ -365,15 +418,14 @@ extension PresentacionQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
-        property: r'nombre',
+        property: r'tipo',
         value: value,
         caseSensitive: caseSensitive,
       ));
     });
   }
 
-  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition>
-      nombreLessThan(
+  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition> tipoLessThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
@@ -381,14 +433,14 @@ extension PresentacionQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
-        property: r'nombre',
+        property: r'tipo',
         value: value,
         caseSensitive: caseSensitive,
       ));
     });
   }
 
-  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition> nombreBetween(
+  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition> tipoBetween(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -397,7 +449,7 @@ extension PresentacionQueryFilter
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
-        property: r'nombre',
+        property: r'tipo',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -408,50 +460,50 @@ extension PresentacionQueryFilter
   }
 
   QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition>
-      nombreStartsWith(
+      tipoStartsWith(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'nombre',
+        property: r'tipo',
         value: value,
         caseSensitive: caseSensitive,
       ));
     });
   }
 
-  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition>
-      nombreEndsWith(
+  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition> tipoEndsWith(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'nombre',
+        property: r'tipo',
         value: value,
         caseSensitive: caseSensitive,
       ));
     });
   }
 
-  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition>
-      nombreContains(String value, {bool caseSensitive = true}) {
+  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition> tipoContains(
+      String value,
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.contains(
-        property: r'nombre',
+        property: r'tipo',
         value: value,
         caseSensitive: caseSensitive,
       ));
     });
   }
 
-  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition> nombreMatches(
+  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition> tipoMatches(
       String pattern,
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.matches(
-        property: r'nombre',
+        property: r'tipo',
         wildcard: pattern,
         caseSensitive: caseSensitive,
       ));
@@ -459,21 +511,77 @@ extension PresentacionQueryFilter
   }
 
   QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition>
-      nombreIsEmpty() {
+      tipoIsEmpty() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'nombre',
+        property: r'tipo',
         value: '',
       ));
     });
   }
 
   QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition>
-      nombreIsNotEmpty() {
+      tipoIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'nombre',
+        property: r'tipo',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition>
+      unidadesEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'unidades',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition>
+      unidadesGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'unidades',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition>
+      unidadesLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'unidades',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterFilterCondition>
+      unidadesBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'unidades',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
       ));
     });
   }
@@ -487,15 +595,27 @@ extension PresentacionQueryLinks
 
 extension PresentacionQuerySortBy
     on QueryBuilder<Presentacion, Presentacion, QSortBy> {
-  QueryBuilder<Presentacion, Presentacion, QAfterSortBy> sortByNombre() {
+  QueryBuilder<Presentacion, Presentacion, QAfterSortBy> sortByTipo() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'nombre', Sort.asc);
+      return query.addSortBy(r'tipo', Sort.asc);
     });
   }
 
-  QueryBuilder<Presentacion, Presentacion, QAfterSortBy> sortByNombreDesc() {
+  QueryBuilder<Presentacion, Presentacion, QAfterSortBy> sortByTipoDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'nombre', Sort.desc);
+      return query.addSortBy(r'tipo', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterSortBy> sortByUnidades() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'unidades', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterSortBy> sortByUnidadesDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'unidades', Sort.desc);
     });
   }
 }
@@ -514,25 +634,43 @@ extension PresentacionQuerySortThenBy
     });
   }
 
-  QueryBuilder<Presentacion, Presentacion, QAfterSortBy> thenByNombre() {
+  QueryBuilder<Presentacion, Presentacion, QAfterSortBy> thenByTipo() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'nombre', Sort.asc);
+      return query.addSortBy(r'tipo', Sort.asc);
     });
   }
 
-  QueryBuilder<Presentacion, Presentacion, QAfterSortBy> thenByNombreDesc() {
+  QueryBuilder<Presentacion, Presentacion, QAfterSortBy> thenByTipoDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'nombre', Sort.desc);
+      return query.addSortBy(r'tipo', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterSortBy> thenByUnidades() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'unidades', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QAfterSortBy> thenByUnidadesDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'unidades', Sort.desc);
     });
   }
 }
 
 extension PresentacionQueryWhereDistinct
     on QueryBuilder<Presentacion, Presentacion, QDistinct> {
-  QueryBuilder<Presentacion, Presentacion, QDistinct> distinctByNombre(
+  QueryBuilder<Presentacion, Presentacion, QDistinct> distinctByTipo(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'nombre', caseSensitive: caseSensitive);
+      return query.addDistinctBy(r'tipo', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<Presentacion, Presentacion, QDistinct> distinctByUnidades() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'unidades');
     });
   }
 }
@@ -545,9 +683,15 @@ extension PresentacionQueryProperty
     });
   }
 
-  QueryBuilder<Presentacion, String, QQueryOperations> nombreProperty() {
+  QueryBuilder<Presentacion, String, QQueryOperations> tipoProperty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'nombre');
+      return query.addPropertyName(r'tipo');
+    });
+  }
+
+  QueryBuilder<Presentacion, int, QQueryOperations> unidadesProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'unidades');
     });
   }
 }
