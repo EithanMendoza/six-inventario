@@ -1,13 +1,12 @@
+// lib/features/mermas/screens/mermas_screen.dart
 import 'package:flutter/material.dart';
-import 'dart:async'; // <-- Necesario para manejar el Stream
+import 'dart:async';
 
-// Modelos y Servicios
 import '../../inventory/models/product_model.dart';
 import '../../inventory/models/inventario_db.dart';
-import '../models/item_merma.dart';
 import '../services/merma_pdf_service.dart';
+import '../controllers/mermas_controller.dart'; // <-- Importar el controlador
 
-// Widgets modulares
 import '../widgets/buscador_mermas.dart';
 import '../widgets/barra_cantidad_mermas.dart';
 import '../widgets/lista_mermas.dart';
@@ -23,37 +22,31 @@ class _MermasScreenState extends State<MermasScreen> {
   final InventarioDB _db = InventarioDB();
   final MermaPdfService _pdfService = MermaPdfService();
 
-  List<Producto> _catalogo = [];
-  final List<ItemMerma> _listaMermas = [];
+  // Instancia global del controlador
+  final MermasController _mermasController = MermasController();
 
+  List<Producto> _catalogo = [];
   bool _isLoading = true;
   bool _isGeneratingPdf = false;
 
   Producto? _productoSeleccionado;
   TextEditingController? _searchController;
-
-  // Variable para guardar la conexión con Isar
   StreamSubscription<void>? _dbSubscription;
 
   @override
   void initState() {
     super.initState();
     _cargarCatalogo();
-    _escucharCambiosDB(); // <-- Iniciamos la escucha reactiva
+    _escucharCambiosDB();
   }
 
-  // <-- Método que escucha la base de datos en tiempo real
   Future<void> _escucharCambiosDB() async {
     final isar = await _db.db;
-    // watchLazy() nos avisa cada vez que la tabla 'productos' sufre cualquier cambio (crear, editar, borrar)
     _dbSubscription = isar.productos.watchLazy().listen((_) {
-      if (mounted) {
-        _cargarCatalogo(); // Si algo cambia en Isar, recargamos la lista silenciosamente
-      }
+      if (mounted) _cargarCatalogo();
     });
   }
 
-  // <-- Cancelar la suscripción si la pantalla se destruye para evitar fugas de memoria
   @override
   void dispose() {
     _dbSubscription?.cancel();
@@ -69,28 +62,15 @@ class _MermasScreenState extends State<MermasScreen> {
     });
   }
 
-  void _agregarMerma(Producto producto, int cantidad) {
-    setState(() {
-      _listaMermas.add(ItemMerma(producto: producto, cantidad: cantidad));
-    });
-  }
-
-  void _eliminarMerma(int index) {
-    setState(() {
-      _listaMermas.removeAt(index);
-    });
-  }
-
-  Future<void> _limpiarLista() async {
-    if (_listaMermas.isEmpty) return; // No abrimos alerta si ya está vacía
+  Future<void> _confirmarLimpieza() async {
+    if (_mermasController.listaMermas.isEmpty) return;
 
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
         title: const Text('¿Vacíar reporte?'),
-        content: const Text(
-            'Se eliminarán todos los productos de esta lista. Tendrás que agregarlos de nuevo.'),
+        content: const Text('Se eliminarán todos los productos de esta lista.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -105,22 +85,65 @@ class _MermasScreenState extends State<MermasScreen> {
     );
 
     if (confirmar == true) {
-      setState(() {
-        _listaMermas.clear();
-      });
+      _mermasController.limpiarLista();
     }
   }
 
   Future<void> _generarYCompartirPDF() async {
     setState(() => _isGeneratingPdf = true);
     try {
-      await _pdfService.generarYCompartirPDF(_listaMermas);
+      await _pdfService.generarYCompartirPDF(_mermasController.listaMermas);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al generar PDF: $e')),
       );
     } finally {
       setState(() => _isGeneratingPdf = false);
+    }
+  }
+
+  Future<void> _mostrarDialogoEdicion(
+      BuildContext context, int index, int cantidadActual) async {
+    final TextEditingController _editController =
+        TextEditingController(text: cantidadActual.toString());
+
+    final nuevaCantidad = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('Editar cantidad'),
+        content: TextField(
+          controller: _editController,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          decoration: const InputDecoration(
+            hintText: '0',
+          ),
+          onTap: () => _editController.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: _editController.text.length,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final val = int.tryParse(_editController.text) ?? 0;
+              Navigator.pop(ctx, val);
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (nuevaCantidad != null && mounted) {
+      _mermasController.actualizarCantidad(index, nuevaCantidad);
     }
   }
 
@@ -135,112 +158,109 @@ class _MermasScreenState extends State<MermasScreen> {
         backgroundColor: colorPrimario,
         foregroundColor: Colors.white,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // CONTENEDOR CON LOS 3 COMPONENTES
-                Container(
-                  margin: const EdgeInsets.all(16.0),
-                  padding: const EdgeInsets.all(16.0),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Column(
-                    children: [
-                      BuscadorMermas(
-                        catalogo: _catalogo,
-                        onSelected: (producto) {
-                          setState(() => _productoSeleccionado = producto);
-                        },
-                        onControllerCreated: (controller) {
-                          _searchController = controller;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      BarraCantidadMermas(
-                        hasProductoSeleccionado: _productoSeleccionado != null,
-                        onAgregar: (cantidad) {
-                          _agregarMerma(_productoSeleccionado!, cantidad);
-                          setState(() => _productoSeleccionado = null);
-                          _searchController?.clear();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
+      // Escuchamos los cambios en el controlador de mermas
+      body: ListenableBuilder(
+        listenable: _mermasController,
+        builder: (context, _) {
+          if (_isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Productos a reportar:',
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87)),
-                      // El botón solo aparece si hay elementos en la lista
-                      if (_listaMermas.isNotEmpty)
-                        TextButton.icon(
-                          onPressed: _limpiarLista,
-                          icon: const Icon(Icons.delete_sweep,
-                              color: Colors.red, size: 20),
-                          label: const Text('Limpiar',
-                              style: TextStyle(color: Colors.red)),
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        ),
-                    ],
-                  ),
+          final listaActual = _mermasController.listaMermas;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                margin: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16.0),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
                 ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: ListaMermasVisual(
-                    listaMermas: _listaMermas,
-                    onEliminar: _eliminarMerma,
-                  ),
+                child: Column(
+                  children: [
+                    BuscadorMermas(
+                      catalogo: _catalogo,
+                      onSelected: (producto) {
+                        setState(() => _productoSeleccionado = producto);
+                      },
+                      onControllerCreated: (controller) {
+                        _searchController = controller;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    BarraCantidadMermas(
+                      hasProductoSeleccionado: _productoSeleccionado != null,
+                      onAgregar: (cantidad) {
+                        _mermasController.agregarMerma(
+                            _productoSeleccionado!, cantidad);
+                        setState(() => _productoSeleccionado = null);
+                        _searchController?.clear();
+                      },
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Productos a reportar:',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
+                    if (listaActual.isNotEmpty)
+                      TextButton.icon(
+                        onPressed: _confirmarLimpieza,
+                        icon: const Icon(Icons.delete_sweep,
+                            color: Colors.red, size: 20),
+                        label: const Text('Limpiar',
+                            style: TextStyle(color: Colors.red)),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListaMermasVisual(
+                  listaMermas: listaActual,
+                  onEliminar: _mermasController.eliminarMerma,
+                  onEditar: (index, cantidadActual) =>
+                      {_mostrarDialogoEdicion(context, index, cantidadActual)},
+                ),
+              ),
+            ],
+          );
+        },
+      ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: FilledButton.icon(
-            onPressed: _listaMermas.isEmpty || _isGeneratingPdf
-                ? null
-                : _generarYCompartirPDF,
-            icon: _isGeneratingPdf
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.picture_as_pdf),
-            label: Text(_isGeneratingPdf ? 'Procesando...' : 'Generar Reporte',
-                style: const TextStyle(fontSize: 14)),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              backgroundColor: Colors.red.shade700,
-              disabledBackgroundColor: Colors.grey.shade300,
-            ),
-          ),
+          child: ListenableBuilder(
+              listenable: _mermasController,
+              builder: (context, _) {
+                return FilledButton.icon(
+                  onPressed:
+                      _mermasController.listaMermas.isEmpty || _isGeneratingPdf
+                          ? null
+                          : _generarYCompartirPDF,
+                  icon: _isGeneratingPdf
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.picture_as_pdf),
+                  label: Text(
+                      _isGeneratingPdf ? 'Procesando...' : 'Generar Reporte'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: Colors.red.shade700,
+                  ),
+                );
+              }),
         ),
       ),
     );

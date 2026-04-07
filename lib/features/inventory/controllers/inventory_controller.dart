@@ -41,6 +41,13 @@ class InventoryController extends ChangeNotifier {
     return _productosFiltrados[categoriaEspecifica?.id] ?? [];
   }
 
+  bool modoAuditoria = false;
+
+  void toggleModoAuditoria() {
+    modoAuditoria = !modoAuditoria;
+    notifyListeners();
+  }
+
   Future<void> cargarInventario() async {
     isLoading = true;
     notifyListeners();

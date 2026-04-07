@@ -51,6 +51,20 @@ class InventoryAppBar extends StatelessWidget implements PreferredSizeWidget {
             controller.cargarInventario();
           },
         ),
+        ListenableBuilder(
+            listenable: controller,
+            builder: (context, _) {
+              return IconButton(
+                icon: Icon(
+                  controller.modoAuditoria
+                      ? Icons.admin_panel_settings
+                      : Icons.admin_panel_settings_outlined,
+                  color: controller.modoAuditoria ? Colors.amber : Colors.white,
+                ),
+                tooltip: 'Modo Auditoría',
+                onPressed: controller.toggleModoAuditoria,
+              );
+            }),
         _buildFilterMenu(),
         _buildSortMenu(),
         const SizedBox(width: 6),
@@ -79,8 +93,8 @@ class InventoryAppBar extends StatelessWidget implements PreferredSizeWidget {
       onSelected: controller.cambiarFiltro,
       itemBuilder: (context) => [
         _buildPopupItem(FiltroEstado.todos, 'Mostrar Todo'),
-        _buildPopupItem(FiltroEstado.completados, 'Completados'),
-        _buildPopupItem(FiltroEstado.faltantes, 'Faltantes'),
+        _buildPopupItem(FiltroEstado.completados, 'Contados'),
+        _buildPopupItem(FiltroEstado.faltantes, 'Sin contar'),
       ],
     );
   }

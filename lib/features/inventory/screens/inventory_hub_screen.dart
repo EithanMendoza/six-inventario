@@ -118,7 +118,8 @@ class _InventoryHubScreenState extends State<InventoryHubScreen>
                     final producto = productos[index];
                     return ProductCard(
                       producto: producto,
-                      onTap: () => _abrirConteo(producto),
+                      modoAuditoria: _controller.modoAuditoria,
+                      onTap: (tipo) => _abrirConteo(producto, tipo),
                       onLongPress: () => _abrirEdicion(producto),
                     );
                   },
@@ -128,7 +129,7 @@ class _InventoryHubScreenState extends State<InventoryHubScreen>
     );
   }
 
-  void _abrirConteo(Producto producto) {
+  void _abrirConteo(Producto producto, TipoConteo tipo) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -137,6 +138,7 @@ class _InventoryHubScreenState extends State<InventoryHubScreen>
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => CountBottomSheet(
         producto: producto,
+        tipo: tipo,
         onSaved: () => _controller.actualizarConteo(producto),
       ),
     );
