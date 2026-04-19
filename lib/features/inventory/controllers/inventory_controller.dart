@@ -21,7 +21,7 @@ class InventoryController extends ChangeNotifier {
 
   String _busquedaActual = '';
   FiltroEstado _filtroActual = FiltroEstado.todos;
-  TipoOrdenamiento _ordenActual = TipoOrdenamiento.alfabeticoAsc;
+  TipoOrdenamiento _ordenActual = TipoOrdenamiento.recientes;
   Presentacion? _presentacionActual;
 
   FiltroEstado get filtroActual => _filtroActual;

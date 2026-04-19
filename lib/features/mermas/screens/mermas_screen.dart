@@ -33,6 +33,11 @@ class _MermasScreenState extends State<MermasScreen> {
   TextEditingController? _searchController;
   StreamSubscription<void>? _dbSubscription;
 
+  bool _buscadorEnfocado = false;
+  bool _cantidadEnfocada = false;
+
+  bool get _mostrarBotonGenerar => !_buscadorEnfocado && !_cantidadEnfocada;
+
   @override
   void initState() {
     super.initState();
@@ -159,108 +164,127 @@ class _MermasScreenState extends State<MermasScreen> {
         foregroundColor: Colors.white,
       ),
       // Escuchamos los cambios en el controlador de mermas
-      body: ListenableBuilder(
-        listenable: _mermasController,
-        builder: (context, _) {
-          if (_isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final listaActual = _mermasController.listaMermas;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                margin: const EdgeInsets.all(16.0),
-                padding: const EdgeInsets.all(16.0),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Column(
-                  children: [
-                    BuscadorMermas(
-                      catalogo: _catalogo,
-                      onSelected: (producto) {
-                        setState(() => _productoSeleccionado = producto);
-                      },
-                      onControllerCreated: (controller) {
-                        _searchController = controller;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    BarraCantidadMermas(
-                      hasProductoSeleccionado: _productoSeleccionado != null,
-                      onAgregar: (cantidad) {
-                        _mermasController.agregarMerma(
-                            _productoSeleccionado!, cantidad);
-                        setState(() => _productoSeleccionado = null);
-                        _searchController?.clear();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Productos a reportar:',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
-                    if (listaActual.isNotEmpty)
-                      TextButton.icon(
-                        onPressed: _confirmarLimpieza,
-                        icon: const Icon(Icons.delete_sweep,
-                            color: Colors.red, size: 20),
-                        label: const Text('Limpiar',
-                            style: TextStyle(color: Colors.red)),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: ListaMermasVisual(
-                  listaMermas: listaActual,
-                  onEliminar: _mermasController.eliminarMerma,
-                  onEditar: (index, cantidadActual) =>
-                      {_mostrarDialogoEdicion(context, index, cantidadActual)},
-                ),
-              ),
-            ],
-          );
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          FocusScope.of(context).unfocus();
+          setState(() {
+            _buscadorEnfocado = false;
+            _cantidadEnfocada = false;
+          });
         },
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: ListenableBuilder(
-              listenable: _mermasController,
-              builder: (context, _) {
-                return FilledButton.icon(
-                  onPressed:
-                      _mermasController.listaMermas.isEmpty || _isGeneratingPdf
-                          ? null
-                          : _generarYCompartirPDF,
-                  icon: _isGeneratingPdf
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.picture_as_pdf),
-                  label: Text(
-                      _isGeneratingPdf ? 'Procesando...' : 'Generar Reporte'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.red.shade700,
+        child: ListenableBuilder(
+          listenable: _mermasController,
+          builder: (context, _) {
+            if (_isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final listaActual = _mermasController.listaMermas;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  margin: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(16.0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
                   ),
-                );
-              }),
+                  child: Column(
+                    children: [
+                      BuscadorMermas(
+                        catalogo: _catalogo,
+                        onSelected: (producto) {
+                          setState(() => _productoSeleccionado = producto);
+                        },
+                        onControllerCreated: (controller) {
+                          _searchController = controller;
+                        },
+                        onFocusChange: (enfocado) {
+                          setState(() => _buscadorEnfocado = enfocado);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      BarraCantidadMermas(
+                        hasProductoSeleccionado: _productoSeleccionado != null,
+                        onAgregar: (cantidad) {
+                          _mermasController.agregarMerma(
+                              _productoSeleccionado!, cantidad);
+                          setState(() => _productoSeleccionado = null);
+                          _searchController?.clear();
+                        },
+                        onFocusChange: (enfocado) {
+                          setState(() => _cantidadEnfocada = enfocado);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Productos a reportar:',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
+                      if (listaActual.isNotEmpty)
+                        TextButton.icon(
+                          onPressed: _confirmarLimpieza,
+                          icon: const Icon(Icons.delete_sweep,
+                              color: Colors.red, size: 20),
+                          label: const Text('Limpiar',
+                              style: TextStyle(color: Colors.red)),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListaMermasVisual(
+                    listaMermas: listaActual,
+                    onEliminar: _mermasController.eliminarMerma,
+                    onEditar: (index, cantidadActual) => {
+                      _mostrarDialogoEdicion(context, index, cantidadActual)
+                    },
+                  ),
+                ),
+                if (_mostrarBotonGenerar)
+                  SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: SizedBox(
+                        width: double
+                            .infinity, // Asegura que el botón se estire de lado a lado
+                        child: FilledButton.icon(
+                          onPressed: _mermasController.listaMermas.isEmpty ||
+                                  _isGeneratingPdf
+                              ? null
+                              : _generarYCompartirPDF,
+                          icon: _isGeneratingPdf
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2))
+                              : const Icon(Icons.picture_as_pdf),
+                          label: Text(_isGeneratingPdf
+                              ? 'Procesando...'
+                              : 'Generar Reporte'),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            backgroundColor: Colors.red.shade700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );

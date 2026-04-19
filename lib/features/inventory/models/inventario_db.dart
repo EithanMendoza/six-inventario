@@ -2,6 +2,7 @@
 
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import '../../mermas/models/item_merma.dart';
 import 'product_model.dart';
 import 'category_model.dart';
 import 'presentacion_model.dart';
@@ -35,6 +36,7 @@ class InventarioDB {
           ProductoSchema,
           CategoriaSchema,
           PresentacionSchema,
+          ItemMermaSchema,
         ],
         directory: dir.path,
       );

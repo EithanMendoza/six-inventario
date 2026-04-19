@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 class BarraCantidadMermas extends StatefulWidget {
   final bool hasProductoSeleccionado;
   final void Function(int cantidad) onAgregar;
+  final ValueChanged<bool>? onFocusChange;
 
   const BarraCantidadMermas({
     super.key,
     required this.hasProductoSeleccionado,
     required this.onAgregar,
+    required this.onFocusChange,
   });
 
   @override
@@ -54,20 +56,25 @@ class _BarraCantidadMermasState extends State<BarraCantidadMermas> {
         SizedBox(
           width: 100,
           height: 48, // Altura estandarizada
-          child: TextField(
-            controller: _cantidadController,
-            keyboardType: TextInputType.number,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-            decoration: InputDecoration(
-              hintText: 'Cant.',
-              filled: true,
-              fillColor: Colors.grey.shade100,
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
+          child: Focus(
+            onFocusChange: (enfocado) {
+              widget.onFocusChange?.call(enfocado);
+            },
+            child: TextField(
+              controller: _cantidadController,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+              decoration: InputDecoration(
+                hintText: 'Cant.',
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
           ),

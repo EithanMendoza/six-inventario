@@ -13,7 +13,7 @@ class InventoryFilterService {
     Categoria? categoria,
     Presentacion? presentacion,
     FiltroEstado estado = FiltroEstado.todos,
-    TipoOrdenamiento orden = TipoOrdenamiento.alfabeticoAsc,
+    TipoOrdenamiento orden = TipoOrdenamiento.recientes,
   }) async {
     // 1. Iniciamos con un filtro que siempre sea cierto para mover el estado
     // de QFilterCondition a QAfterFilterCondition inmediatamente.
@@ -56,6 +56,13 @@ class InventoryFilterService {
         break;
       case TipoOrdenamiento.codigoDesc:
         resultados = await query.sortByCodigoBarrasDesc().findAll();
+        break;
+      case TipoOrdenamiento.recientes:
+        final listaAscendente = await query.findAll();
+        resultados = listaAscendente.reversed.toList();
+        break;
+      case TipoOrdenamiento.antiguos:
+        resultados = await query.findAll();
         break;
     }
 

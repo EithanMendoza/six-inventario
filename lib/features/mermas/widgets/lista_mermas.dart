@@ -35,7 +35,8 @@ class ListaMermasVisual extends StatelessWidget {
 
         return Dismissible(
           // Clave única basada en el ID para evitar bugs gráficos al borrar
-          key: ValueKey(item.producto.id),
+          key: ValueKey(
+              item.producto.value?.codigoBarras.toString() ?? 'merma_$index'),
           direction: DismissDirection.endToStart,
           background: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
@@ -54,8 +55,8 @@ class ListaMermasVisual extends StatelessWidget {
               builder: (ctx) => AlertDialog(
                 backgroundColor: Colors.white,
                 title: const Text('Eliminar producto'),
-                content:
-                    Text('¿Quitar ${item.producto.descripcion} del reporte?'),
+                content: Text(
+                    '¿Quitar ${item.producto.value?.descripcion ?? 'Sin descripción'} del reporte?'),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, false),
@@ -95,11 +96,12 @@ class ListaMermasVisual extends StatelessWidget {
                 ),
               ),
               title: Text(
-                item.producto.descripcion,
+                item.producto.value?.descripcion ?? 'Sin descripción',
                 style:
                     const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
-              subtitle: Text('Código: ${item.producto.codigoBarras}'),
+              subtitle: Text(
+                  'Código: ${item.producto.value?.codigoBarras.toString() ?? 'S/C'}'),
               trailing: IconButton(
                 icon: const Icon(Icons.edit,
                     color: Colors

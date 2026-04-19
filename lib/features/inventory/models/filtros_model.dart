@@ -10,7 +10,9 @@ enum TipoOrdenamiento {
   alfabeticoAsc, // A - Z
   alfabeticoDesc, // Z - A
   codigoAsc, // 0 - 9 (Por código de barras)
-  codigoDesc // 9 - 0 (Por código de barras)
+  codigoDesc, // 9 - 0 (Por código de barras)
+  recientes,
+  antiguos
 }
 
 // ELIMINADO: enum FiltroCategoria { todas, cervezas, cigarros }

@@ -14,9 +14,11 @@ class MermaPdfService {
 
     // 1. Extraer a primitivos (Strings) para no romper el Isolate con objetos de Isar
     final datosAislados = mermas
-        .map((item) => [
-              item.producto.codigoBarras,
-              item.producto.descripcion,
+        .map<List<String>>((item) => [
+              // <-- Tipado explícito añadido aquí
+              item.producto.value?.codigoBarras.toString() ??
+                  'S/C', // <-- .toString() añadido aquí
+              item.producto.value?.descripcion ?? 'Sin descripción',
               item.cantidad.toString(),
             ])
         .toList();

@@ -1,53 +1,92 @@
 // lib/features/mermas/controllers/mermas_controller.dart
 import 'package:flutter/material.dart';
+import 'package:isar/isar.dart';
 import '../models/item_merma.dart';
 import '../../inventory/models/product_model.dart';
+import '../../inventory/models/inventario_db.dart';
 
 class MermasController extends ChangeNotifier {
-  // Patrón Singleton para acceso global
   static final MermasController _instance = MermasController._internal();
   factory MermasController() => _instance;
-  MermasController._internal();
 
-  final List<ItemMerma> _listaMermas = [];
+  MermasController._internal() {
+    _cargarMermasDesdeDB(); // Carga inicial al instanciar
+  }
 
-  // Exponer una copia inmutable para evitar modificaciones fuera del controlador
+  final InventarioDB _db = InventarioDB();
+  List<ItemMerma> _listaMermas = [];
+
+  // Exponer una copia inmutable para la vista
   List<ItemMerma> get listaMermas => List.unmodifiable(_listaMermas);
 
-  void agregarMerma(Producto producto, int cantidad) {
-    // Evitar duplicados: si ya existe, sumar la cantidad
-    final index =
-        _listaMermas.indexWhere((item) => item.producto.id == producto.id);
-    if (index >= 0) {
-      _listaMermas[index] = ItemMerma(
-          producto: producto,
-          cantidad: _listaMermas[index].cantidad + cantidad);
-    } else {
-      _listaMermas.add(ItemMerma(producto: producto, cantidad: cantidad));
+  Future<void> _cargarMermasDesdeDB() async {
+    final isar = await _db.db;
+    _listaMermas = await isar.itemMermas.where().findAll();
+
+    // Importante: Cargar los vínculos de los productos para poder leer sus nombres y códigos
+    for (var item in _listaMermas) {
+      await item.producto.load();
     }
     notifyListeners();
   }
 
-  void eliminarMerma(int index) {
-    _listaMermas.removeAt(index);
-    notifyListeners();
+  Future<void> agregarMerma(Producto producto, int cantidad) async {
+    final isar = await _db.db;
+
+    await isar.writeTxn(() async {
+      // Buscar si el producto ya está en el borrador de mermas
+      final existente = await isar.itemMermas
+          .filter()
+          .producto((q) => q.idEqualTo(producto.id))
+          .findFirst();
+
+      if (existente != null) {
+        existente.cantidad += cantidad;
+        await isar.itemMermas.put(existente);
+      } else {
+        final nuevo = ItemMerma.crear(producto, cantidad);
+        await isar.itemMermas.put(nuevo);
+        await nuevo.producto.save();
+      }
+    });
+
+    await _cargarMermasDesdeDB();
   }
 
-  void limpiarLista() {
-    _listaMermas.clear();
-    notifyListeners();
-  }
-
-  void actualizarCantidad(int index, int nuevaCantidad) {
+  Future<void> actualizarCantidad(int index, int nuevaCantidad) async {
     if (nuevaCantidad <= 0) {
-      eliminarMerma(index); // Si el usuario edita a 0, mejor lo eliminamos
+      await eliminarMerma(index); // Si edita a 0, lo borramos de la BD
     } else {
-      final itemActual = _listaMermas[index];
-      _listaMermas[index] = ItemMerma(
-        producto: itemActual.producto,
-        cantidad: nuevaCantidad,
-      );
-      notifyListeners();
+      final isar = await _db.db;
+      final itemParaActualizar = _listaMermas[index];
+
+      await isar.writeTxn(() async {
+        itemParaActualizar.cantidad = nuevaCantidad;
+        await isar.itemMermas
+            .put(itemParaActualizar); // Actualizamos el registro en Isar
+      });
+
+      await _cargarMermasDesdeDB();
     }
+  }
+
+  Future<void> eliminarMerma(int index) async {
+    final isar = await _db.db;
+    final idParaEliminar = _listaMermas[index].id;
+
+    await isar.writeTxn(() async {
+      await isar.itemMermas.delete(idParaEliminar);
+    });
+
+    await _cargarMermasDesdeDB();
+  }
+
+  Future<void> limpiarLista() async {
+    final isar = await _db.db;
+    await isar.writeTxn(() async {
+      await isar.itemMermas.clear(); // Vacía toda la tabla
+    });
+
+    await _cargarMermasDesdeDB();
   }
 }

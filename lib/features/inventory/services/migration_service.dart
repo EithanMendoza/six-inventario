@@ -30,11 +30,30 @@ class MigrationService {
 
     int registrosMigrados = 0;
 
+    // Valor centinela que Isar inyecta por defecto a los enteros no nulos nuevos
+    const int isarMinInt = -9223372036854775808;
+
     // 3. ÚNICA TRANSACCIÓN DE ESCRITURA
     await isar.writeTxn(() async {
       for (final producto in todosLosProductos) {
-        // Ahora el .value ya está en memoria gracias al paso 1
+        bool requiereGuardado = false;
+
+        // --- INICIO PARCHE DE CORRUPCIÓN ISAR ---
+        if (producto.conteoSistema == isarMinInt) {
+          producto.conteoSistema = 0;
+          requiereGuardado = true;
+        }
+        if (producto.cantidadFisica == isarMinInt) {
+          producto.cantidadFisica = 0;
+          requiereGuardado = true;
+        }
+        // --- FIN PARCHE ---
+
+        // Configuración de relaciones faltantes
         if (producto.presentacion.value == null) {
+          requiereGuardado =
+              true; // <-- Marcamos que este producto también necesita guardarse
+
           String nombreCat;
           String tipoPres;
           int unidadesPres = 1;
@@ -88,14 +107,17 @@ class MigrationService {
             await isar.collection<Presentacion>().put(presentacion);
           }
 
-          // Vinculación y persistencia
+          // Vinculación en RAM
           producto.categoria.value = categoria;
           producto.presentacion.value = presentacion;
+        }
 
+        // --- ÚNICO PUNTO DE GUARDADO ---
+        // Si el producto tenía datos corruptos O le faltaban relaciones, lo actualizamos
+        if (requiereGuardado) {
           await isar.collection<Producto>().put(producto);
           await producto.categoria.save();
           await producto.presentacion.save();
-
           registrosMigrados++;
         }
       }
@@ -103,7 +125,7 @@ class MigrationService {
 
     if (registrosMigrados > 0) {
       print(
-          'Auditoría: $registrosMigrados productos migrados sin colisión de transacciones.');
+          'Auditoría: $registrosMigrados productos migrados/reparados sin colisión de transacciones.');
     }
   }
 }

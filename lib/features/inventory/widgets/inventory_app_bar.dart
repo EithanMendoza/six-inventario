@@ -122,6 +122,10 @@ class InventoryAppBar extends StatelessWidget implements PreferredSizeWidget {
             value: TipoOrdenamiento.alfabeticoDesc, child: Text('Z - A')),
         PopupMenuItem(value: TipoOrdenamiento.codigoAsc, child: Text('0 - 9')),
         PopupMenuItem(value: TipoOrdenamiento.codigoDesc, child: Text('9 - 0')),
+        PopupMenuItem(
+            value: TipoOrdenamiento.recientes, child: Text('Más Recientes')),
+        PopupMenuItem(
+            value: TipoOrdenamiento.antiguos, child: Text('Más Antiguos')),
       ],
     );
   }
