@@ -71,34 +71,8 @@ class ProductCard extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // El Físico ya no es un botón separado, hereda el toque de toda la tarjeta
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8.0, vertical: 4.0),
-                        child: Column(
-                          children: [
-                            const Text('Físico',
-                                style: TextStyle(
-                                    color: Colors.grey, fontSize: 12)),
-                            Text(
-                              '${producto.cantidadFisica}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 20,
-                                color: isCounted
-                                    ? Colors.green.shade700
-                                    : Colors.black,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // El Sistema mantiene su propio botón encapsulado
+                      // 1. El Sistema ahora va primero (a la izquierda), condicionado a la auditoría
                       if (modoAuditoria) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                            width: 1, height: 40, color: Colors.grey.shade300),
-                        const SizedBox(width: 8),
                         InkWell(
                           onTap: () => onTap(TipoConteo
                               .sistema), // Este toque anula el general
@@ -125,7 +99,35 @@ class ProductCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                      ]
+                        // El separador visual se queda en medio
+                        const SizedBox(width: 8),
+                        Container(
+                            width: 1, height: 40, color: Colors.grey.shade300),
+                        const SizedBox(width: 8),
+                      ],
+
+                      // 2. El Físico ahora va a la derecha, heredando el toque de la tarjeta
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8.0, vertical: 4.0),
+                        child: Column(
+                          children: [
+                            const Text('Físico',
+                                style: TextStyle(
+                                    color: Colors.grey, fontSize: 12)),
+                            Text(
+                              '${producto.cantidadFisica}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
+                                color: isCounted
+                                    ? Colors.green.shade700
+                                    : Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   )
                 ],

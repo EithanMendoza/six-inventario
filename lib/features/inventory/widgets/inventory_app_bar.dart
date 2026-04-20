@@ -1,5 +1,6 @@
 // lib/features/inventory/widgets/inventory_app_bar.dart
 import 'package:flutter/material.dart';
+import 'package:six_inventario/core/app_theme.dart';
 import '../controllers/inventory_controller.dart';
 import '../models/filtros_model.dart';
 import '../screens/category_settings_screen.dart';
@@ -23,7 +24,7 @@ class InventoryAppBar extends StatelessWidget implements PreferredSizeWidget {
         child: TextField(
           onChanged: controller.buscar,
           decoration: InputDecoration(
-            hintText: 'Buscar productos...',
+            hintText: 'Buscar',
             hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 12),
             prefixIcon:
                 Icon(Icons.search, color: Colors.grey.shade600, size: 20),
@@ -66,7 +67,7 @@ class InventoryAppBar extends StatelessWidget implements PreferredSizeWidget {
               );
             }),
         _buildFilterMenu(),
-        _buildSortMenu(),
+        _buildSortMenu(context),
         const SizedBox(width: 6),
       ],
       bottom: TabBar(
@@ -88,14 +89,34 @@ class InventoryAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   Widget _buildFilterMenu() {
-    return PopupMenuButton<FiltroEstado>(
-      icon: const Icon(Icons.filter_alt),
-      onSelected: controller.cambiarFiltro,
-      itemBuilder: (context) => [
-        _buildPopupItem(FiltroEstado.todos, 'Mostrar Todo'),
-        _buildPopupItem(FiltroEstado.completados, 'Contados'),
-        _buildPopupItem(FiltroEstado.faltantes, 'Sin contar'),
-      ],
+    // MAGIA AQUÍ: Envolvemos el menú para que escuche los cambios de color en tiempo real
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        Color colorIcono;
+        switch (controller.filtroActual) {
+          case FiltroEstado.completados:
+            colorIcono = Colors.greenAccent;
+            break;
+          case FiltroEstado.faltantes:
+            colorIcono = Colors.orangeAccent;
+            break;
+          case FiltroEstado.todos:
+          default:
+            colorIcono = Colors.white; // O el color de tu AppBar
+            break;
+        }
+
+        return PopupMenuButton<FiltroEstado>(
+          icon: Icon(Icons.filter_alt, color: colorIcono),
+          onSelected: controller.cambiarFiltro,
+          itemBuilder: (context) => [
+            _buildPopupItem(FiltroEstado.todos, 'Mostrar Todo'),
+            _buildPopupItem(FiltroEstado.completados, 'Contados'),
+            _buildPopupItem(FiltroEstado.faltantes, 'Sin contar'),
+          ],
+        );
+      },
     );
   }
 
@@ -107,26 +128,79 @@ class InventoryAppBar extends StatelessWidget implements PreferredSizeWidget {
           style: TextStyle(
               fontWeight: controller.filtroActual == valor
                   ? FontWeight.bold
-                  : FontWeight.normal)),
+                  : FontWeight.normal,
+              color: controller.filtroActual == valor
+                  ? AppTheme.colorPrimario
+                  : Colors.black87)),
     );
   }
 
-  Widget _buildSortMenu() {
-    return PopupMenuButton<TipoOrdenamiento>(
-      icon: const Icon(Icons.sort),
-      onSelected: controller.cambiarOrden,
-      itemBuilder: (context) => const [
-        PopupMenuItem(
-            value: TipoOrdenamiento.alfabeticoAsc, child: Text('A - Z')),
-        PopupMenuItem(
-            value: TipoOrdenamiento.alfabeticoDesc, child: Text('Z - A')),
-        PopupMenuItem(value: TipoOrdenamiento.codigoAsc, child: Text('0 - 9')),
-        PopupMenuItem(value: TipoOrdenamiento.codigoDesc, child: Text('9 - 0')),
-        PopupMenuItem(
-            value: TipoOrdenamiento.recientes, child: Text('Más Recientes')),
-        PopupMenuItem(
-            value: TipoOrdenamiento.antiguos, child: Text('Más Antiguos')),
-      ],
+  Widget _buildSortMenu(BuildContext context) {
+    // También lo hacemos reactivo para que el icono principal cambie de color
+    return ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) {
+          final bool isDefault =
+              controller.ordenActual == TipoOrdenamiento.recientes;
+
+          return PopupMenuButton<TipoOrdenamiento>(
+            icon: Icon(
+              Icons.sort,
+              color: isDefault ? Colors.white : Colors.lightBlueAccent,
+            ),
+            onSelected: controller.cambiarOrden,
+            itemBuilder: (ctx) => [
+              // GRUPO 1: Tiempo (Iconos de reloj muy claros)
+              _buildSortItem(ctx, TipoOrdenamiento.recientes, 'Más Recientes',
+                  Icons.access_time),
+              _buildSortItem(ctx, TipoOrdenamiento.antiguos, 'Más Antiguos',
+                  Icons.history),
+
+              const PopupMenuDivider(),
+
+              // GRUPO 2: Alfabético (Flechas direccionales)
+              _buildSortItem(ctx, TipoOrdenamiento.alfabeticoAsc, 'A - Z',
+                  Icons.arrow_downward),
+              _buildSortItem(ctx, TipoOrdenamiento.alfabeticoDesc, 'Z - A',
+                  Icons.arrow_upward),
+
+              const PopupMenuDivider(),
+
+              // GRUPO 3: Códigos (Flechas direccionales)
+              _buildSortItem(
+                  ctx, TipoOrdenamiento.codigoAsc, '0 - 9', Icons.arrow_upward),
+              _buildSortItem(ctx, TipoOrdenamiento.codigoDesc, '9 - 0',
+                  Icons.arrow_downward),
+            ],
+          );
+        });
+  }
+
+  // 3. Modificamos la función para que reciba el BuildContext
+  PopupMenuItem<TipoOrdenamiento> _buildSortItem(BuildContext context,
+      TipoOrdenamiento valor, String texto, IconData icono) {
+    final bool isSelected = controller.ordenActual == valor;
+
+    // 4. ¡Ahora esto funcionará perfectamente porque ya sabe qué es context!
+    final colorPrimario = Theme.of(context).colorScheme.primary;
+
+    return PopupMenuItem(
+      value: valor,
+      child: Row(
+        children: [
+          Icon(icono,
+              size: 20,
+              color: isSelected ? colorPrimario : Colors.grey.shade600),
+          const SizedBox(width: 12),
+          Text(
+            texto,
+            style: TextStyle(
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              color: isSelected ? colorPrimario : Colors.black87,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
